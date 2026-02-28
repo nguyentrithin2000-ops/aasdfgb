@@ -1,60 +1,44 @@
-import { OpenAI } from "openai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextResponse } from "next/server";
 
-export const maxDuration = 80; // Tăng thời gian chờ lên 60s cho truyện dài
+export const maxDuration = 60;
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+// Khởi tạo Gemini với Key bắt đầu bằng AIzaSy...
+const genAI = new GoogleGenerativeAI(process.env.OPENAI_API_KEY || ""); 
 
 export async function POST(req: Request) {
   try {
     const { prompt, character, history } = await req.json();
 
-    if (!character || !prompt) {
-      return NextResponse.json({ error: "Thiếu thông tin khởi tạo" }, { status: 400 });
-    }
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-    const safeHistory = Array.isArray(history) ? history : [];
-    const chatHistory = safeHistory.map((h: any) => ([
-      { role: "user", content: h.choice_made || "" },
-      { role: "assistant", content: h.content || "" }
-    ])).flat();
+    const systemPrompt = `Bạn là một đại tác giả viết truyện mạng chuyên nghiệp.
+      Bối cảnh: ${character.world_type}. Nhân vật: ${character.name}. Thiên phú: ${character.talent}.
+      NHIỆM VỤ:
+      1. Viết tiếp CHƯƠNG TRUYỆN mới dựa trên hành động: "${prompt}" (ít nhất 1000 chữ).
+      2. Cấu trúc: 
+         - ** [TÊN CHƯƠNG] **
+         - Nội dung chương truyện dài.
+         - Kết thúc bằng 3 lựa chọn: [1]..., [2]..., [3]...`;
 
-    const systemPrompt = `Bạn là một đại tác giả viết truyện mạng chuyên nghiệp, phong cách hành văn lôi cuốn, kịch tính.
-      Bối cảnh thế giới: ${character.world_type}. 
-      Nhân vật chính: ${character.name}. 
-      Thiên phú: ${character.talent}.
-
-      NHIỆM VỤ CỦA BẠN:
-      1. Viết tiếp một CHƯƠNG TRUYỆN mới dựa trên lựa chọn của người chơi: "${prompt}".
-      2. Độ dài: Phải viết cực kỳ chi tiết, miêu tả sâu sắc nội tâm, khung cảnh và các tình tiết bất ngờ (ít nhất 1000 chữ).
-      3. Cấu trúc bài viết BẮT BUỘC:
-         - Bắt đầu bằng TIÊU ĐỀ CHƯƠNG (để trong dấu ** **).
-         - Nội dung chương truyện dài, lôi cuốn.
-         - Kết thúc chương bằng cách đưa ra đúng 3 LỰA CHỌN gợi ý theo định dạng:
-           [1] - Nội dung lựa chọn 1
-           [2] - Nội dung lựa chọn 2
-           [3] - Nội dung lựa chọn 3`;
-
-    const response = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo", 
-      messages: [
-        { role: "system", content: systemPrompt },
-        ...chatHistory,
-        { role: "user", content: prompt },
-      ],
-      temperature: 0.8,
-      stream: true, // Bật chế độ Streaming
+    // Chuyển đổi lịch sử cho chuẩn Gemini
+    const chat = model.startChat({
+      history: history.map((h: any) => ({
+        role: "user",
+        parts: [{ text: h.choice_made }],
+      })).concat(history.map((h: any) => ({
+        role: "model",
+        parts: [{ text: h.content }],
+      }))),
     });
 
-    // Tạo luồng dữ liệu trả về cho Frontend
+    const result = await chat.sendMessageStream(systemPrompt + "\n\nLựa chọn của tôi: " + prompt);
+
     const stream = new ReadableStream({
       async start(controller) {
         const encoder = new TextEncoder();
-        for await (const chunk of response) {
-          const content = chunk.choices[0]?.delta?.content || "";
-          controller.enqueue(encoder.encode(content));
+        for await (const chunk of result.stream) {
+          controller.enqueue(encoder.encode(chunk.text()));
         }
         controller.close();
       },
@@ -63,7 +47,7 @@ export async function POST(req: Request) {
     return new Response(stream);
 
   } catch (error: any) {
-    console.error("Lỗi OpenAI API:", error);
-    return NextResponse.json({ error: "Thiên cơ nhiễu loạn!" }, { status: 500 });
+    console.error("Lỗi Gemini:", error);
+    return NextResponse.json({ error: "Lỗi kết nối AI" }, { status: 500 });
   }
 }
