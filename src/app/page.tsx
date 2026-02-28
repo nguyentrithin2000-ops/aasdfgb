@@ -8,43 +8,62 @@ export default function Home() {
   const [name, setName] = useState("");
   const [world, setWorld] = useState("Tu Tiên");
   const [talent, setTalent] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const rollTalent = () => {
-    const list = ["Thiên Linh Căn", "Hệ Thống Buff", "Mắt Âm Dương", "Phàm Nhân"];
+  const quayGacha = () => {
+    const list = ["Hỏa Hệ Thiên Linh Căn", "Mắt Âm Dương", "Hệ Thống Buff", "Cơ Thể Bất Tử"];
     setTalent(list[Math.floor(Math.random() * list.length)]);
   };
 
-  const createGame = async () => {
-    if (!name || !talent) return alert("Hãy nhập tên và quay Gacha!");
+  const batDau = async () => {
+    if (!name || !talent) return alert("Nhập tên và Quay Gacha đã!");
+    setLoading(true);
     
     const { data, error } = await supabase
       .from('characters')
-      .insert([{ name, world_type: world, talent, hp: 100, level: 1 }])
+      .insert([{ 
+        name, 
+        world_type: world, 
+        talent, 
+        hp: 100, 
+        level: 1 
+      }])
       .select();
 
+    if (error) {
+      alert("Lỗi lưu DB: " + error.message);
+      setLoading(false);
+      return;
+    }
     if (data) router.push(`/play/${data[0].id}`);
   };
 
   return (
-    <main className="flex flex-col items-center p-10 bg-black min-h-screen text-white">
-      <h1 className="text-4xl font-bold text-purple-500 mb-8">THẾ GIỚI ẢO ẢNH</h1>
-      <div className="bg-gray-900 p-6 rounded-lg border border-purple-900 w-full max-w-md">
+    <div className="flex flex-col items-center justify-center min-h-screen bg-slate-950 text-white p-4">
+      <h1 className="text-3xl font-bold text-purple-400 mb-6 tracking-tighter">KHỞI TẠO NGHỊCH THIÊN</h1>
+      <div className="bg-slate-900 p-8 rounded-2xl border border-slate-800 w-full max-w-md">
         <input 
-          className="w-full p-3 mb-4 bg-gray-800 rounded" 
-          placeholder="Tên nhân vật..." 
-          onChange={e => setName(e.target.value)} 
+          placeholder="Tên của bạn..." 
+          className="w-full p-3 rounded bg-slate-800 mb-4 outline-none border border-transparent focus:border-purple-500 text-white"
+          onChange={e => setName(e.target.value)}
         />
-        <select className="w-full p-3 mb-4 bg-gray-800" onChange={e => setWorld(e.target.value)}>
-          <option>Tu Tiên</option>
-          <option>Linh Dị</option>
-          <option>Đô Thị</option>
+        <select className="w-full p-3 rounded bg-slate-800 mb-4 text-white" onChange={e => setWorld(e.target.value)}>
+          <option value="Tu Tiên">Xuyên Không Tu Tiên</option>
+          <option value="Linh Dị">Linh Dị Sinh Tồn</option>
+          <option value="Đô Thị">Đô Thị Tình Ái</option>
         </select>
-        <button onClick={rollTalent} className="w-full py-2 bg-yellow-600 mb-4 hover:bg-yellow-500">
-          Quay Gacha Thiên Phú
+        <button onClick={quayGacha} className="w-full py-2 bg-amber-600 rounded-lg mb-4 hover:bg-amber-500 transition font-bold">
+          QUAY GACHA THIÊN PHÚ
         </button>
-        {talent && <p className="text-center text-green-400 mb-4">Nhận được: {talent}</p>}
-        <button onClick={createGame} className="w-full py-4 bg-purple-700 font-bold">BẮT ĐẦU</button>
+        {talent && <p className="text-center text-yellow-400 font-bold mb-4">✨ {talent} ✨</p>}
+        <button 
+          onClick={batDau} 
+          disabled={loading}
+          className="w-full py-4 bg-purple-600 rounded-xl font-black text-xl hover:shadow-[0_0_20px_rgba(147,51,234,0.5)] transition disabled:bg-gray-600"
+        >
+          {loading ? "ĐANG KHỞI TẠO..." : "BẮT ĐẦU HÀNH TRÌNH"}
+        </button>
       </div>
-    </main>
+    </div>
   );
 }
