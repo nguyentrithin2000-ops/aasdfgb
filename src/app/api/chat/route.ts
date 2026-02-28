@@ -8,7 +8,7 @@ const openai = new OpenAI({
 
 export async function POST(req: Request) {
   try {
-    const { prompt, character, history } = await response.json();
+    const { prompt, character, history } = await req.json();
 
     // Cấu trúc ngữ cảnh để AI hiểu lịch sử truyện
     const chatHistory = history.map((h: any) => ([
