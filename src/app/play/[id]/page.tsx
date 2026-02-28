@@ -1,69 +1,106 @@
 "use client";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { useParams } from "next/navigation";
 
-
-
-export default function GameScreen({ params }: { params: { id: string } }) {
+export default function Game() {
+  const params = useParams();
+  const id = params?.id as string;
+  
   const [char, setChar] = useState<any>(null);
-  const [story, setStory] = useState<string[]>(["Đang tải hành trình..."]);
+  const [history, setHistory] = useState<any[]>([]);
   const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(true);
 
-  // Load dữ liệu nhân vật vĩnh viễn từ Supabase
   useEffect(() => {
-    const loadChar = async () => {
-      const { data } = await supabase.from('characters').select('*').eq('id', params.id).single();
-      setChar(data);
-      setStory([`Chào mừng ${data.name} đến với thế giới ${data.world_type}. Thiên phú ${data.talent} đang tỏa sáng...`]);
-    };
-    loadChar();
-  }, [params.id]);
+    if (!id) return;
 
-  const handleAction = async () => {
-    // 1. Gửi input cho AI (giả lập ở đây, bạn sẽ gọi API OpenAI/Gemini tại đây)
-    const newScene = `Bạn vừa thực hiện: ${input}. AI đang tính toán kết quả...`;
+    const fetchData = async () => {
+      // 1. Lấy thông tin nhân vật
+      const { data: charData } = await supabase.from('characters').select('*').eq('id', id).single();
+      if (charData) setChar(charData);
+
+      // 2. Lấy lịch sử truyện
+      const { data: logs } = await supabase.from('story_logs').select('*').eq('character_id', id).order('created_at', { ascending: true });
+      if (logs) setHistory(logs);
+      
+      setLoading(false);
+    };
+
+    fetchData();
+  }, [id]);
+
+  const handleSend = async () => {
+    if (!input || !id) return;
     
-    // 2. Cập nhật Log vào Database
-    await supabase.from('story_logs').insert([{ character_id: params.id, content: newScene, choice_made: input }]);
-    
-    // 3. Cập nhật UI
-    setStory(prev => [...prev, `> ${input}`, newScene]);
+    const userChoice = input;
     setInput("");
-    
-    // 4. Ví dụ cập nhật Tu vi (Level) tự động lên Database
-    await supabase.from('characters').update({ level: char.level + 1 }).eq('id', params.id);
+
+    // Tạm thời tạo câu trả lời mẫu (Sau này bạn sẽ lắp API AI vào đây)
+    const aiResponse = `Bạn chọn: "${userChoice}". Kết quả là hành trình của bạn tiếp tục đầy kịch tính...`;
+
+    const { error } = await supabase.from('story_logs').insert([
+      { character_id: id, content: aiResponse, choice_made: userChoice }
+    ]);
+
+    if (!error) {
+      setHistory([...history, { choice_made: userChoice, content: aiResponse }]);
+    }
   };
 
-  if (!char) return <div className="text-white text-center mt-20">Đang khởi tạo linh căn...</div>;
+  if (loading) return <div className="bg-black text-white h-screen flex items-center justify-center">Đang nhập hồn...</div>;
+  if (!char) return <div className="text-white p-10 text-center">Không tìm thấy nhân vật!</div>;
 
   return (
-    <div className="flex h-screen bg-black text-gray-300">
-      {/* Sidebar: Trạng thái nhân vật */}
-      <div className="w-1/4 border-r border-gray-800 p-4 bg-gray-900">
-        <h2 className="text-xl font-bold text-yellow-500">{char.name}</h2>
-        <p>Thế giới: {char.world_type}</p>
-        <p className="text-green-400">Tu vi: Cấp {char.level}</p>
-        <div className="mt-4 bg-gray-800 h-4 rounded-full overflow-hidden">
-          <div className="bg-red-600 h-full" style={{ width: `${char.hp}%` }}></div>
+    <div className="flex h-screen bg-slate-950 text-slate-200">
+      {/* Sidebar Chỉ số */}
+      <div className="w-64 border-r border-slate-800 p-6 bg-slate-900 hidden md:block">
+        <h2 className="text-2xl font-black text-purple-400 mb-2">{char.name}</h2>
+        <p className="text-xs uppercase tracking-widest text-slate-500 mb-6">{char.world_type}</p>
+        <div className="space-y-4">
+          <div className="bg-slate-800 p-3 rounded-lg">
+            <p className="text-xs text-slate-400 uppercase">Tu vi</p>
+            <p className="text-xl font-bold text-yellow-500">Cấp {char.level}</p>
+          </div>
+          <div>
+            <p className="text-xs text-slate-400 mb-1">Huyết khí</p>
+            <div className="w-full bg-slate-800 h-2 rounded-full">
+              <div className="bg-red-500 h-full rounded-full transition-all" style={{ width: `${char.hp}%` }}></div>
+            </div>
+          </div>
         </div>
-        <p className="text-xs mt-1">Huyết khí: {char.hp}/100</p>
       </div>
 
-      {/* Main Game Console */}
-      <div className="w-3/4 flex flex-col p-6">
-        <div className="flex-1 overflow-y-auto mb-4 space-y-4">
-          {story.map((s, i) => (
-            <p key={i} className={s.startsWith('>') ? "text-blue-400" : "text-white"}>{s}</p>
+      {/* Main Story */}
+      <div className="flex-1 flex flex-col p-4 md:p-8">
+        <div className="flex-1 overflow-y-auto space-y-6 pr-2 custom-scrollbar">
+          <p className="italic text-slate-500 text-center border-b border-slate-800 pb-4">
+            Hành trình bắt đầu với thiên phú: <span className="text-yellow-500">{char.talent}</span>
+          </p>
+          {history.map((log, i) => (
+            <div key={i} className="animate-in fade-in slide-in-from-bottom-2 duration-500">
+              <p className="text-purple-400 text-sm mb-1 font-bold">➔ {log.choice_made}</p>
+              <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-800">
+                <p className="text-lg leading-relaxed text-slate-100">{log.content}</p>
+              </div>
+            </div>
           ))}
         </div>
-        <div className="flex gap-2">
+        
+        <div className="mt-6 flex gap-3">
           <input 
             value={input}
-            onChange={e => setInput(e.target.value)}
-            className="flex-1 bg-gray-800 p-4 rounded border border-gray-700 focus:outline-none focus:border-purple-500" 
-            placeholder="Gõ hành động của bạn (VD: Đi vào hang động)..." 
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+            className="flex-1 bg-slate-900 border border-slate-800 p-4 rounded-2xl focus:border-purple-500 outline-none transition"
+            placeholder="Bạn sẽ làm gì tiếp theo?"
           />
-          <button onClick={handleAction} className="bg-purple-600 px-8 rounded font-bold hover:bg-purple-500">GỬI</button>
+          <button 
+            onClick={handleSend}
+            className="bg-purple-600 px-8 rounded-2xl font-bold hover:bg-purple-500 transition active:scale-95"
+          >
+            GỬI
+          </button>
         </div>
       </div>
     </div>
