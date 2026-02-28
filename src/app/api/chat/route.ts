@@ -1,5 +1,6 @@
 import { OpenAI } from "openai";
 import { NextResponse } from "next/server";
+export const maxDuration = 80;
 
 // Khởi tạo OpenAI với Key từ Environment Variable
 const openai = new OpenAI({
